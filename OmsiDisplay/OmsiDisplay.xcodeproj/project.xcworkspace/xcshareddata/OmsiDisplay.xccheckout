@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>495530D9-01C5-444F-A0E0-4A638DAEC3BA</string>
+	<key>IDESourceControlProjectName</key>
+	<string>OmsiDisplay</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>D4C2A915EA4E54F6824638567302829A127EDA1A</key>
+		<string>https://github.com/ChromaPDX/RPIDisplayClient.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>OmsiDisplay/OmsiDisplay.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>D4C2A915EA4E54F6824638567302829A127EDA1A</key>
+		<string>../../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/ChromaPDX/RPIDisplayClient.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>D4C2A915EA4E54F6824638567302829A127EDA1A</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>D4C2A915EA4E54F6824638567302829A127EDA1A</string>
+			<key>IDESourceControlWCCName</key>
+			<string>OmsiDisplay</string>
+		</dict>
+	</array>
+</dict>
+</plist>
