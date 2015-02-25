@@ -10,8 +10,11 @@ void ofApp::setup(){
     printf("******** enter setup ****** \n");
     //
     
-    ofSetFrameRate(60);
-
+    ofSetFrameRate(30);
+    ofSetLogLevel(OF_LOG_VERBOSE);
+    ofSetLogLevel("ofThread",OF_LOG_NOTICE);
+    ofHideCursor();
+    
     playlistController.setup();
 }
 

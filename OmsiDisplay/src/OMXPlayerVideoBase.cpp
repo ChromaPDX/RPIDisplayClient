@@ -18,7 +18,7 @@ OMXPlayerVideoBase::OMXPlayerVideoBase()
 	m_pStream       = NULL;
 	m_av_clock      = NULL;
 	m_decoder       = NULL;
-	m_fps           = 25.0f;
+	m_fps           = 0.0f;
 	m_flush         = false;
 	m_cached_size   = 0;
 	m_iVideoDelay   = 0;

@@ -118,7 +118,10 @@ bin/src/ofLambdaThread.o: src/ofLambdaThread.cpp src/ofLambdaThread.h \
  ../../../libs/openFrameworks/utils/ofFileUtils.h \
  ../../../libs/poco/include/Poco/File.h \
  ../../../libs/poco/include/Poco/Timestamp.h \
- ../../../libs/poco/include/Poco/File_UNIX.h
+ ../../../libs/poco/include/Poco/File_UNIX.h \
+ ../../../libs/openFrameworks/app/ofAppRunner.h \
+ ../../../libs/openFrameworks/types/ofRectangle.h \
+ ../../../libs/openFrameworks/utils/ofLog.h
 
 src/ofLambdaThread.h:
 
@@ -361,3 +364,9 @@ src/ofLambdaThread.h:
 ../../../libs/poco/include/Poco/Timestamp.h:
 
 ../../../libs/poco/include/Poco/File_UNIX.h:
+
+../../../libs/openFrameworks/app/ofAppRunner.h:
+
+../../../libs/openFrameworks/types/ofRectangle.h:
+
+../../../libs/openFrameworks/utils/ofLog.h:

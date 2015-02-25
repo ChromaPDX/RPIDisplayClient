@@ -18,6 +18,7 @@
 #include "ofxOMXPlayer.h"
 #include "ParseController.h"
 #include "URLImage.h"
+#include <mutex>
 
 class PlaylistItemPlayer {
     
@@ -32,11 +33,11 @@ public:
     
     ofxOMXPlayerListener* listener;
     
-    void loadMovie(shared_ptr<PlaylistItem> item);
+    bool loadMovie(shared_ptr<PlaylistItem> item);
     
     // STILL
     
-    ofImage image;
+    shared_ptr<ofImage> image;
     int alpha {0};
     
     void draw();
@@ -60,6 +61,7 @@ typedef enum TransitionState {
     TransitionTransition,
     TransitionUnload,
     TransitionPlay,
+    TransitionWaiting,
 } TransitionState;
 
 class Playlist;
@@ -107,20 +109,22 @@ public:
                         cout << "Erase partial download" << endl;
                         existing.remove();
                     }
-                                    
+                    
                     cout << "Begin download of : " << asset->url << " to " << path << endl;
                     
                     loader.saveAsync(asset->url, path);
                     
-//                    loader.saveTo(asset->url, path);
-//                    
-//                    cout << "Finish download of : " << asset->name() << endl;
-//                    downloadQueue.front()->isAvailable = true;
-//                    downloadQueue.erase(downloadQueue.begin());
-//                    downloading = false;
-//                    ofUnregisterURLNotification(this);
+                    //                    loader.saveTo(asset->url, path);
+                    //
+                    //                    cout << "Finish download of : " << asset->name() << endl;
+                    //                    downloadQueue.front()->isAvailable = true;
+                    //                    downloadQueue.erase(downloadQueue.begin());
+                    //                    downloading = false;
+                    //                    ofUnregisterURLNotification(this);
                 }
             }
+            
+            ofSleepMillis(100);
             
         }
         
@@ -133,18 +137,34 @@ public:
 
 class PlaylistController : public ofxOMXPlayerListener {
     
+    // TRACK META-DATA
+    int loopsSinceBoot = 0;
+    int failedFetchRequests = 0;
+    
 public:
     
     ParseController parseController;
-    void fetchData();
+    
+    bool fetchData();
+    
+    bool savePlaylist(shared_ptr<Json::Value> playlistItems);
+    shared_ptr<Json::Value> loadCachedPlaylist();
     
     shared_ptr<DisplayClient> me;
     
-    LThread slideThread; // TIMING
-    LThread saveThread;
     WebThread webThread; // BACKGROUND THREAD
     
+    BackgroundThread bgThread;
+    BackgroundThread parseThread;
+    
     queue<std::function<void(void)>> mainQueue;
+    std::mutex mainLock;
+    
+    void runOnMainQueue(std::function<void(void)> operation){
+        mainLock.lock();
+        mainQueue.push(operation);
+        mainLock.unlock();
+    }
     
     shared_ptr<Playlist> testPlaylist();
     shared_ptr<Playlist> playlist;

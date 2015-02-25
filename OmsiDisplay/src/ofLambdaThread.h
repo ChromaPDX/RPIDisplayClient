@@ -12,27 +12,47 @@
 #include "ofThread.h"
 #include "ofFileUtils.h"
 #include <functional>
+#include <queue>
+#include "ofAppRunner.h"
 
-
-
-template <typename I> class TLThread : public ofThread {
+class BackgroundThread : public ofThread {
     
 public:
     
-    I input;
-    function<bool(I)> operationBlock;
+    queue<std::function<bool(void)>> operations;
+    
+    BackgroundThread() : ofThread() {
+        thread.setPriority((Poco::Thread::Priority)Poco::Thread::getMinOSPriority());
+        printf("spawn thread priority (%d) \n", thread.getPriority());
+    }
+    
+    void addOperation(std::function<bool(void)> operation){
+        lock();
+        operations.push(operation);
+        unlock();
+    }
     
     void threadedFunction() {
         
         // start
         
         while(isThreadRunning()) {
-            if (operationBlock(input)) stopThread();
+            
+            if (operations.size()){
+                if (operations.front()()){
+                    lock();
+                    operations.pop();
+                    unlock();
+                }
+            }
+            
+            ofSleepMillis(100);
         }
         
         // done
     }
 };
+
 
 class LThread : public ofThread {
     
@@ -58,6 +78,8 @@ public:
                 operationBlock = nullptr;
                 stopThread();
             }
+            
+            ofSleepMillis(100);
         }
         
         // done

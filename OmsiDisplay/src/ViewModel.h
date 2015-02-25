@@ -12,7 +12,15 @@
 #include "ofMain.h"
 #include "ofxJSON.h"
 
+#include <chrono>
+
 using namespace Json;
+
+typedef std::chrono::system_clock::time_point timePoint;
+
+timePoint string_to_time_point(const std::string &str);
+std::string time_point_to_string(timePoint &tp);
+Value time_point_to_json(timePoint &tp);
 
 typedef enum AssetType {
     AssetTypeNone,
@@ -27,23 +35,23 @@ public:
     ~ViewModel(){};
     
     string objectId;
-    string createdAt;
-    string updatedAt;
-    
+    timePoint createdAt;
+    timePoint updatedAt;
+
     virtual string className() = 0;
     
     virtual shared_ptr<Value> toJson() {
         auto out = make_shared<Value>();
         (*out)["objectId"] = objectId;
-        (*out)["createdAt"] = createdAt;
-        (*out)["updatedAt"]= updatedAt;
+        (*out)["createdAt"] = time_point_to_string(createdAt);
+        (*out)["updatedAt"] = time_point_to_string(updatedAt);
         return out;
     }
     
     virtual void readJson(const Value& json){
         validateString(json, "objectId", objectId);
-        validateString(json, "createdAt", createdAt);
-        validateString(json, "updatedAt", updatedAt);
+        validateDate(json, "createdAt", createdAt);
+        validateDate(json, "updatedAt", updatedAt);
     }
     
     virtual const Value updatedKeys() {
@@ -52,15 +60,39 @@ public:
     
     void validateString(const Value& json, const string& key, string& out){
         if (!json[key].empty()){
-            printf("set %s for key %s \n", json[key].asString().c_str(), key.c_str());
+            //printf("set %s for key %s \n", json[key].asString().c_str(), key.c_str());
             out = json[key].asString();
         }
     }
     
     void validateNumber(const Value& json, const string& key, int& out){
         if (!json[key].empty()){
-            printf("set %s for key %s \n", json[key].asString().c_str(), key.c_str());
+            //printf("set %s for key %s \n", json[key].asString().c_str(), key.c_str());
             out = json[key].asInt();
+        }
+    }
+    
+    void validateBool(const Value& json, const string& key, bool& out){
+        if (!json[key].empty()){
+            //printf("set %s for key %s \n", json[key].asString().c_str(), key.c_str());
+            out = json[key].asBool();
+        }
+    }
+    
+    void validateDate(const Value& json, const string& key, timePoint& out){
+        if (!json[key].empty()){
+            if (key == "createdAt" || key == "updatedAt"){
+                string dateString = json[key].asString();
+                out = string_to_time_point(dateString);
+                //std::time_t epoch_time = std::chrono::system_clock::to_time_t(out);
+                //printf("time %s -> %ld -> %s\n", dateString.c_str(), epoch_time, time_point_to_string(out).c_str());
+            }
+            else if (!json[key]["iso"].empty()){ // DATE OBJECT WITH TYPE
+                string dateString = json[key]["iso"].asString();
+                out = string_to_time_point(dateString);
+                //std::time_t epoch_time = std::chrono::system_clock::to_time_t(out);
+                //printf("time %s -> %ld -> %s\n", dateString.c_str(), epoch_time, time_point_to_string(out).c_str());
+            }
         }
     }
     
@@ -82,9 +114,14 @@ public:
     // PERSISTENT
     AssetType type;
     string url;
-    string localPath;
+    
+    timePoint addDate;
+    timePoint removeDate;
+    
+    bool enabled {1};
     
     // CONVENIENCE
+    string localPath;
     bool isAvailable {false};
     string md5name();
     string name();
@@ -101,21 +138,26 @@ public:
     }
     
     void readJson(const Value& json) override{
+        using namespace std::chrono;
         ViewModel::readJson(json);
+        
         validateString(json, "url", url);
+        
+        validateDate(json, "addDate", addDate);
+        validateDate(json, "removeDate", removeDate);
+        
+        validateBool(json, "enabled", enabled);
+        
         if (!json["assetType"].empty()){
             type = (AssetType)json["assetType"].asInt();
         };
     }
-    
     shared_ptr<Value> toJson() override {
         auto out = ViewModel::toJson();
         (*out)["url"] = url;
         (*out)["type"] = type;
         return out;
     }
-    
-   
 };
 
 class PlaylistItem : public ViewModel {
@@ -124,10 +166,8 @@ public:
     using ViewModel::ViewModel;
     
     shared_ptr<Asset> asset;
-    string addDate;
-    string removeDate;
-    int duration = {0};
-    int index;
+    int duration {0};
+    int index {0};
     
     static shared_ptr<PlaylistItem> fromJson(ofxJSONElement& json);
     
@@ -148,20 +188,11 @@ public:
     void readJson(const Value& json) override{
         ViewModel::readJson(json);
         
-        printf("PlaylistItem::readJson \n");
+        //printf("PlaylistItem::readJson \n");
         
         validateNumber(json, "duration", duration);
         validateNumber(json, "index", index);
-        
-//        if (!json["duration"].empty()){
-//            duration = json["duration"].asInt();
-//        };
-//        if (!json["addDate"].empty()){
-//            addDate = json["addDate"]["iso"].asString();
-//        };
-//        if (!json["removeDate"].empty()){
-//            addDate = json["removeDate"]["iso"].asString();
-//        };
+
         if (!json["asset"].empty()){
             Value jdefault;
             asset = Asset::fromJson(json.get("asset", jdefault));
@@ -172,8 +203,6 @@ public:
         auto out = ViewModel::toJson();
         (*out)["duration"] = duration;
         (*out)["asset"] = *asset->toJson();
-        //(*out)["url"] = asset->url;
-        //(*out)["type"] = asset->assetType;
         return out;
     }
     
@@ -202,6 +231,12 @@ class DisplayClient : public ViewModel {
 public:
     string deviceId;
     string zone;
+    string callCustomFunction;
+    
+    // META
+    int loopsSinceBoot = 0;
+    int failedFetchRequests = 0;
+    
     Json::Value screenShot;
     Json::Value screenShots;
     
@@ -213,6 +248,11 @@ public:
         auto out = ViewModel::toJson();
         (*out)["deviceId"] = deviceId;
         (*out)["zone"] = zone;
+        (*out)["callCustomFunction"] = callCustomFunction;
+        // META-DATA
+        (*out)["loopsSinceBoot"] = loopsSinceBoot;
+        (*out)["upTime"] = ofGetElapsedTimef();
+        (*out)["failedFetchRequests"] = failedFetchRequests;
         if (!screenShot.empty()) (*out)["screenShot"] = screenShot;
         if (!screenShots.empty()) (*out)["screenShots"] = screenShots;
         return out;
@@ -226,6 +266,10 @@ public:
         ViewModel::readJson(json);
         validateString(json, "deviceId", deviceId);
         validateString(json, "zone", zone);
+        validateString(json, "callCustomFunction", callCustomFunction);
+        // loopsSinceBoot is write only
+        // uptime is write only
+        
         if (!json["screenShot"].empty()) {
             screenShot = json["screenShot"];
             screenShot["__type"] = "File";
@@ -239,6 +283,11 @@ public:
         auto out = Value();
         (out)["deviceId"] = deviceId;
         (out)["zone"] = zone;
+        (out)["callCustomFunction"] = callCustomFunction;
+        // META-DATA
+        (out)["loopsSinceBoot"] = loopsSinceBoot;
+        (out)["upTime"] = ofGetElapsedTimef();
+        (out)["failedFetchRequests"] = failedFetchRequests;
         if (!screenShot.empty()) (out)["screenShot"] = screenShot;
         if (!screenShots.empty()) (out)["screenShots"] = screenShots;
         printf("updated keys %s \n", out.toStyledString().c_str());

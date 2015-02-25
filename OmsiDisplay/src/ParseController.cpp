@@ -136,7 +136,7 @@ shared_ptr<Json::Value> ParseController::apiCall(string requestType, string urlS
         raw = strdup(json->toRawString().c_str());
     }
     
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+    //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
     
     //    if (requestType == "POST"){
     //        curl_easy_setopt(curl, CURLOPT_POST, 1L);
@@ -166,7 +166,7 @@ shared_ptr<Json::Value> ParseController::apiCall(string requestType, string urlS
     curl_slist_free_all(headers);
     
     if(CURLE_OK == response) {
-        printf("response : %s \n", data.ptr);
+        //printf("response : %s \n", data.ptr);
         shared_ptr<Json::Value> ret = make_shared<ofxJSONElement>(string(data.ptr));
         if (raw) free(raw);
         free(data.ptr);
@@ -198,7 +198,7 @@ shared_ptr<Json::Value> ParseController::apiCall(string requestType, ofFile& fil
 
     printf("send file %s \n", path.c_str());
     
-    string url = ParseController::parseDomain +  ParseController::filePrefix + "/" + path ;//ParseController::objectPrefix + className;
+    string url = ParseController::parseDomain +  ParseController::filePrefix + path ;//ParseController::objectPrefix + className;
     
     printf("curl request : \n %s \n", url.c_str());
     
@@ -229,7 +229,7 @@ shared_ptr<Json::Value> ParseController::apiCall(string requestType, ofFile& fil
     }
     
     
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+    //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
     
     if (requestType.length()) {
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, requestType.c_str());
@@ -255,7 +255,7 @@ shared_ptr<Json::Value> ParseController::apiCall(string requestType, ofFile& fil
     fclose(fd);
     
     if(CURLE_OK == response) {
-        printf("response : %s \n", data.ptr);
+        //printf("response : %s \n", data.ptr);
         shared_ptr<Json::Value> ret = make_shared<ofxJSONElement>(string(data.ptr));
         free(data.ptr);
         return ret;

@@ -38,7 +38,7 @@ bool OMXPlayerEGLImage::Open(COMXStreamInfo& hints, OMXClock *av_clock, EGLImage
 
 	m_hints       = hints;
 	m_av_clock    = av_clock;
-	m_fps         = 25.0f;
+	m_fps         = 0.0;
 	m_frametime   = 0;
 	m_iCurrentPts = DVD_NOPTS_VALUE;
 	m_bAbort      = false;
@@ -119,7 +119,6 @@ bool OMXPlayerEGLImage::Close()
 	m_flush   = true;
 	
 	Flush();
-	
 
 	if(ThreadHandle())
 	{

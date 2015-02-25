@@ -67,7 +67,7 @@ bool OMXPlayerVideo::Open(COMXStreamInfo& hints, OMXClock *av_clock, bool deinte
 
 	m_hints       = hints;
 	m_av_clock    = av_clock;
-	m_fps         = 25.0f;
+	m_fps         = 0.0f;
 	m_frametime   = 0;
 	m_Deinterlace = deinterlace;
 	m_display_aspect = display_aspect;

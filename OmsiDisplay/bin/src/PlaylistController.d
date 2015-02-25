@@ -119,9 +119,11 @@ bin/src/PlaylistController.o: src/PlaylistController.cpp \
  ../../../libs/openFrameworks/utils/ofFileUtils.h \
  ../../../libs/poco/include/Poco/File.h \
  ../../../libs/poco/include/Poco/Timestamp.h \
- ../../../libs/poco/include/Poco/File_UNIX.h src/ViewModel.h \
+ ../../../libs/poco/include/Poco/File_UNIX.h \
+ ../../../libs/openFrameworks/app/ofAppRunner.h \
+ ../../../libs/openFrameworks/types/ofRectangle.h \
+ ../../../libs/openFrameworks/utils/ofLog.h src/ViewModel.h \
  ../../../libs/openFrameworks/ofMain.h \
- ../../../libs/openFrameworks/utils/ofLog.h \
  ../../../libs/openFrameworks/utils/ofSystemUtils.h \
  ../../../libs/openFrameworks/utils/ofURLFileLoader.h \
  ../../../libs/openFrameworks/events/ofEvents.h \
@@ -148,7 +150,6 @@ bin/src/PlaylistController.o: src/PlaylistController.cpp \
  ../../../libs/openFrameworks/utils/ofUtils.h \
  ../../../libs/poco/include/Poco/Path.h \
  ../../../libs/openFrameworks/types/ofBaseTypes.h \
- ../../../libs/openFrameworks/types/ofRectangle.h \
  ../../../libs/openFrameworks/3d/ofMesh.h \
  ../../../libs/openFrameworks/gl/ofGLUtils.h \
  ../../../libs/openFrameworks/graphics/ofPixels.h \
@@ -242,7 +243,6 @@ bin/src/PlaylistController.o: src/PlaylistController.cpp \
  ../../../libs/openFrameworks/graphics/ofRendererCollection.h \
  ../../../libs/openFrameworks/graphics/ofTrueTypeFont.h \
  ../../../libs/openFrameworks/app/ofBaseApp.h \
- ../../../libs/openFrameworks/app/ofAppRunner.h \
  ../../../libs/openFrameworks/sound/ofSoundStream.h \
  ../../../libs/openFrameworks/sound/ofBaseSoundStream.h \
  ../../../libs/openFrameworks/sound/ofRtAudioSoundStream.h \
@@ -754,11 +754,15 @@ src/ofLambdaThread.h:
 
 ../../../libs/poco/include/Poco/File_UNIX.h:
 
+../../../libs/openFrameworks/app/ofAppRunner.h:
+
+../../../libs/openFrameworks/types/ofRectangle.h:
+
+../../../libs/openFrameworks/utils/ofLog.h:
+
 src/ViewModel.h:
 
 ../../../libs/openFrameworks/ofMain.h:
-
-../../../libs/openFrameworks/utils/ofLog.h:
 
 ../../../libs/openFrameworks/utils/ofSystemUtils.h:
 
@@ -811,8 +815,6 @@ src/ViewModel.h:
 ../../../libs/poco/include/Poco/Path.h:
 
 ../../../libs/openFrameworks/types/ofBaseTypes.h:
-
-../../../libs/openFrameworks/types/ofRectangle.h:
 
 ../../../libs/openFrameworks/3d/ofMesh.h:
 
@@ -999,8 +1001,6 @@ src/ViewModel.h:
 ../../../libs/openFrameworks/graphics/ofTrueTypeFont.h:
 
 ../../../libs/openFrameworks/app/ofBaseApp.h:
-
-../../../libs/openFrameworks/app/ofAppRunner.h:
 
 ../../../libs/openFrameworks/sound/ofSoundStream.h:
 
