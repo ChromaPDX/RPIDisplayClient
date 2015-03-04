@@ -9,102 +9,258 @@
 #include "PlaylistController.h"
 #include "ViewModel.h"
 #include <Poco/Environment.h>
+#include <sys/syscall.h>
 
-shared_ptr<Playlist> PlaylistController::testPlaylist() {
-    return make_shared<Playlist>();
-}
+static string appPath = "/home/pi/OmsiDisplay";
+static string appVersion = "0.91";
 
 #define LIVE 1
+
+void PlaylistController::runOnMainQueue(std::function<void(void)> operation){
+    if (syscall(SYS_gettid) == mainQueueId){
+        printf("** dispatch : already on main queue \n");
+        operation();
+        return;
+    }
+    printf("main queue dispatch %ld -> %ld \n", syscall(SYS_gettid), mainQueueId);
+    mainLock.lock();
+    mainQueue.push(operation);
+    mainLock.unlock();
+}
+
+queue<std::function<void(void)>> PlaylistController::mainQueue;
+std::mutex PlaylistController::mainLock;
+long PlaylistController::mainQueueId = 0;
 
 string assetPath(){
     return ofToDataPath("./assets/", false);
 }
 
 void PlaylistController::setup(){
+    deviceId = Poco::Environment::nodeId();
+    
+    ofEnableAlphaBlending();
+    
     printf("setup playlist \n");
+    
     webThread.startThread();
     bgThread.startThread();
     parseThread.startThread();
-    webThread.lock();
-    getNextItem();
-    webThread.unlock();
+    
+    mainQueueId = syscall(SYS_gettid);
+    
+    printf("main queue id: %ld \n", mainQueueId);
+    printf("process th id: %ld \n", getpid());
+    
+    runOnMainQueue([this](){
+        getNextItem();
+    });
 }
 
-bool PlaylistController::fetchData(){
+void PlaylistController::fetchData(){
     
-    //return false; // force local
+    //printf("fetch data in background \n");
     
-    printf("fetch data \n");
-    
-    Json::Value defaultValue;
-    
-    shared_ptr<Json::Value> response(parseController.fetchAll("Display"));
-    
-    if (response){
+    webThread.addOperation([this](){
         
-        auto results = response->get("results", defaultValue);
+        printf("fetching . . . \n");
         
-        vector<shared_ptr<DisplayClient>>displays;
+        Json::Value defaultValue;
         
-        auto deviceId = Poco::Environment::nodeId();
+        shared_ptr<Json::Value> response(parseController.fetchAll("Display"));
         
-        for (auto& value : results){
+        if (response){
             
-            //printf("fetched result: %s \n", value.toStyledString().c_str());
+            auto results = response->get("results", defaultValue);
             
-            if (value["deviceId"].asString() == deviceId){
-                me = DisplayClient::fromJson(value);
+            vector<shared_ptr<DisplayClient>>displays;
+            
+            for (auto& value : results){
+                
+                //printf("fetched result: %s \n", value.toStyledString().c_str());
+                
+                if (value["deviceId"].asString() == deviceId){
+                    me = DisplayClient::fromJson(value);
+                }
+                
+                displays.push_back(DisplayClient::fromJson(value));
             }
             
-            displays.push_back(DisplayClient::fromJson(value));
-        }
-        
-        if (!me) {
-            parseController.createNewDisplay();
-            return false;
-        }
-        
-        else {
+            if (!me) {
+                parseController.createNewDisplay(deviceId);
+                return true;
+            }
             
-            string cachedFunction = me->callCustomFunction;
-            
-            me->callCustomFunction = "";
-            
-            printf("update me : \n");
-            
-            uploadScreenShots();
-            
-            me->loopsSinceBoot = loopsSinceBoot;
-            me->failedFetchRequests = failedFetchRequests;
-            
-            auto result = parseController.updateObject(me);
-            
-            if (result){
-                me->readJson(*result);
-                if (cachedFunction != ""){
-                    printf("call custom function : %s \n", cachedFunction.c_str());
-                    
-                    if (cachedFunction == "reboot"){
-                        printf("force restart app now !! \n");
-                        ofExit();
+            else {
+                
+                string cachedFunction = me->callCustomFunction;
+                me->callCustomFunction = "";
+                printf("update me : \n");
+                
+                uploadScreenShots();
+                
+                me->loopsSinceBoot = loopsSinceBoot;
+                me->failedFetchRequests = failedFetchRequests;
+                me->appVersion = appVersion;
+                
+                auto result = parseController.updateObject(me);
+                
+                if (result){
+                    me->readJson(*result);
+                    if (cachedFunction != ""){
+                        printf("call custom function : %s \n", cachedFunction.c_str());
+                        if (cachedFunction == "reboot"){
+                            runOnMainQueue([]{
+                                printf("force restart app now !! \n");
+                                ofExit(1);
+                            });
+                        }
+                        else if (cachedFunction == "update"){
+                            printf("queue app update !! \n");
+                            webThread.addOperation([this]{
+                                softwareUpdate();
+                                return true;
+                            });
+                        }
+                    }
+                    auto items = fetchItems();
+                    if (items) {
+                        runOnMainQueue([this, items]{
+                            savePlaylist(items);
+                            setItems(items, true);
+                        });
+                        loopsSinceBoot++;
+                        return true;
                     }
                 }
-                auto items = fetchItems();
-                if (items) {
-                    savePlaylist(items);
-                    setItems(items);
-                    loopsSinceBoot++;
-                    return true;
-                }
-                return false;
             }
             
-            return false;
+        }
+        
+        printf("network fetch failed . . . \n");
+        
+        // CATCH
+        failedFetchRequests++;
+        
+        auto items = loadCachedPlaylist();
+        
+        if (items) {
+            runOnMainQueue([this, items]{
+                setItems(items, false);
+                printf("loaded cached playlist ! \n");
+            });
+        }
+        
+        return true;
+    });
+    
+    printf("queued fetch \n");
+    
+}
+
+void PlaylistController::softwareUpdate(){
+    
+    printf("begin software update . . . \n");
+    
+    Json::Value defaultValue;
+    Json::Value versionToUpdate;
+    
+    auto response = parseController.fetchAll("SoftwareUpdate");
+    
+    auto results = response->get("results", defaultValue);
+    
+    float version = 0.0;
+    
+    for (auto& updateFile : results){
+        float sVersion = updateFile["version"].asFloat();
+        if  (sVersion > version){
+            version = sVersion;
+            versionToUpdate = updateFile;
         }
     }
     
-    printf("no server response, check back later \n");
-    return false;
+    if (!versionToUpdate["url"].isNull()){
+        
+        auto asset = make_shared<Asset>();
+        
+        asset->url = versionToUpdate["url"].asString();
+        asset->checksum = versionToUpdate["checksum"].asString();
+        asset->version = versionToUpdate["version"].asFloat();
+        
+        printf("queue download : update -> v %1.2f \n", asset->version);
+        
+        asset->completionBlock = [asset](){
+            
+            // main queue
+            
+            ofDirectory assetDirectory(ofToDataPath("./assets", false));
+            
+            assetDirectory.listDir();
+            
+            auto allFiles = assetDirectory.getFiles();
+            
+            for (auto& file : allFiles){
+                
+                if (file.getFileName() == asset->md5name()){
+                    
+                    long long checksum = atoll(asset->checksum.c_str());
+                    long long fileSize = file.getSize();
+                    
+                    printf("file exists : compare filesize %lld : %lld expected \n", fileSize, checksum);
+                    
+                    if (fileSize == checksum){
+                        
+                        asset->isAvailable = true;
+                        asset->localPath = file.getAbsolutePath();
+                        
+                        printf("successfully downloaded software v %1.2f \n", asset->version);
+                        printf("file path: %s \n", asset->localPath.c_str());
+                        
+                        ofFile displayApp = ofFile(appPath);
+                        if (displayApp.exists()){
+                            printf("replacing main software . . . \n");
+                            
+//                            std::ostringstream vv;
+//                            vv << myFloat;
+//                            std::string s(ss.str());
+                            
+                            string archivePath = appPath+"_archive_"+appVersion;
+                            displayApp.moveTo(archivePath);
+                            
+                            if (file.moveTo(appPath)){
+                                printf("set permissions \n");
+                                string pCommand = "chmod +X " + appPath;
+                                
+                                std::system(pCommand.c_str());
+                                
+                                printf("that went splendidly, let's reboot in 5 \n");
+                                sleep(5);
+                                ofExit(0);
+                            }
+                            else {
+                                printf("uh-oh, can't move new file, restoring original \n");
+                                displayApp.moveTo(appPath);
+                            }
+                        }
+                        else {
+                            printf("uh-oh, can't find main software, maybe u f'ed up? \n");
+                        }
+                    }
+                    else {
+                        printf("invalid or incomplete download for %s , re-downloading \n", asset->name().c_str());
+                        if (!file.remove()){
+                            printf("error deleting file ! %s \n", asset->name().c_str());
+                        }
+                        
+                    }
+                }
+            }
+            
+        };
+        
+        // we're on webThread so just push
+        webThread.queueDownload(asset);
+    }
 }
 
 bool validateAsset(shared_ptr<Asset> asset){
@@ -145,12 +301,15 @@ shared_ptr<Json::Value> PlaylistController::fetchItems() {
     }
 }
 
-void PlaylistController::setItems(shared_ptr<Json::Value> playlistItems) {
-    // TEST
-    playlist = testPlaylist();
-    // END TEST
+void PlaylistController::setItems(shared_ptr<Json::Value> playlistItems, bool isOnline) {
     
-#if LIVE
+    if (!playlistItems){
+        // setting to nil
+        // default asset will be loaded next playlist loop
+        return;
+    }
+    
+    playlist = make_shared<Playlist>();
     
     Json::Value defaultValue;
     
@@ -174,20 +333,37 @@ void PlaylistController::setItems(shared_ptr<Json::Value> playlistItems) {
         for (auto& file : allFiles){
             
             if (file.getFileName() == item->asset->md5name()){
-                item->asset->isAvailable = true;
-                item->asset->localPath = file.getAbsolutePath();
+                
+                long long checksum = atoll(item->asset->checksum.c_str());
+                long long fileSize = file.getSize();
+                
+                printf("file exists : compare filesize %lld : %lld expected \n", fileSize, checksum);
+                
+                if (fileSize == checksum){
+                    item->asset->isAvailable = true;
+                    item->asset->localPath = file.getAbsolutePath();
+                }
+                else {
+                    printf("invalid or incomplete download for %s , re-downloading \n", item->asset->name().c_str());
+                    if (!file.remove()){
+                        printf("error deleting file ! %s \n", item->asset->name().c_str());
+                    }
+                    
+                }
             }
         }
         
         if (!item->asset->isAvailable) {
-            printf("queue download %d : %s \n", webThread.downloadQueue.size(), item->asset->url.c_str());
-            webThread.downloadQueue.push_back(item->asset);
+            if (isOnline){
+                webThread.queueDownload(item->asset);
+            }
         }
         
         if (validateAsset(item->asset) && item->asset->isAvailable) {
             playlist->items.push_back(item);
             cout << "validated asset : " << item->asset->name() << endl;
         }
+        
         else {
             cout << "asset invalid : " << item->asset->name() << endl;
         }
@@ -199,70 +375,9 @@ void PlaylistController::setItems(shared_ptr<Json::Value> playlistItems) {
              return a->index < b->index;
          });
     
-#else
-    
-    printf("enumerate directory: %s \n", assetPath().c_str());
-    
-    ofDirectory currentVideoDirectory(assetPath());
-    
-    if (currentVideoDirectory.exists())
-    {
-        currentVideoDirectory.listDir();
-        currentVideoDirectory.sort();
-        
-        auto allFiles = currentVideoDirectory.getFiles();
-        
-        //        for (auto& file : allFiles){
-        //             printf("file: %s , ext %s \n", file.path().c_str(), file.getExtension().c_str());
-        //        }
-        
-        //        sort(allFiles.begin(), allFiles.end(), [](ofFile& a, ofFile& b) -> bool
-        //        {
-        //            return a.getExtension() < b.getExtension();
-        //        });
-        
-        for (auto& file : allFiles){
-            if (file.getExtension() == "mov" || file.getExtension() == "mp4") {
-                playlist->items.push_back(PlaylistItem::fromData(AssetTypeVideo, file.path()));
-            }
-            else if (file.getExtension() == "jpg" || file.getExtension() == "jpeg" ||
-                     file.getExtension() == "png" || file.getExtension() == "tiff") {
-                playlist->items.push_back(PlaylistItem::fromData(AssetTypePhoto, file.path(), 10));
-            }
-        }
-        
-        for (auto item : playlist->items){
-            if (item->asset->type == AssetTypePhoto) printf("(*)photo : %s \n", item->asset->localPath.c_str());
-            else if (item->asset->type == AssetTypeVideo) printf("(*)video : %s \n", item->asset->localPath.c_str());
-        }
-        
-    }
-    else {
-        printf("can't find video directory : %s \n", currentVideoDirectory.path().c_str());
-    }
-    
-    
-    //    sort(playlist->items.begin(), playlist->items.end(),
-    //         [](shared_ptr<PlaylistItem> a, shared_ptr<PlaylistItem> b) -> bool
-    //         {
-    //             return a->file > b->file;
-    //         });
-    //
-    //    for (auto& item : playlist->items){
-    //        if (item->type == AssetTypeVideo){
-    //            printf("setup omx player %s \n", item->file.c_str());
-    //            videoController.setup(item->file);
-    //            return;
-    //        }
-    //    }
-    
-#endif
-    
     for (auto& player : players){
         player.listener = this;
     }
-    
-    ofEnableAlphaBlending();
     
     printf("finished set items \n");
 }
@@ -318,27 +433,32 @@ shared_ptr<Json::Value> PlaylistController::loadCachedPlaylist() {
     return shared_ptr<Json::Value>();
 }
 
+shared_ptr<Playlist> PlaylistController::defaultPlaylist() {
+    
+    auto item = make_shared<PlaylistItem>(AssetTypePhoto, assetPath() + "default.jpg", 30);
+    
+    auto playlist = make_shared<Playlist>();
+    
+    playlist->items.push_back(item);
+    
+    return playlist;
+}
+
 void PlaylistController::getNextItem(){
     if (counter == 0) {
-        if (!webThread.downloading) {
+        if (!webThread.downloading()) {
             currentItem = nullptr;
-            if (!fetchData()){
-                printf("error fetching playlist items, going offline \n");
-                failedFetchRequests++;
-                // HACK FOR NOW TO SLEEP AND TRY AGAIN
-                printf("look for cached items \n");
-                auto items = loadCachedPlaylist();
-                if (items) {
-                    setItems(items);
-                    printf("loaded cached playlist ! \n");
-                }
-                else {
-                    sleep(10);
-                    printf("retry fetch \n");
-                    getNextItem();
-                }
-            }
+            fetchData();
         }
+        else {
+            printf("download in progress, skipping fetch \n");
+        }
+    }
+    
+    // force playlist to default, if none present
+    if (!playlist || !playlist->items.size()) {
+        printf("load default image ! \n");
+        playlist = defaultPlaylist();
     }
     
     if (playlist->items.size() > counter){
@@ -362,7 +482,7 @@ void PlaylistController::getNextItem(){
             if (item->asset->isAvailable) availableCount++;
         }
         if (availableCount == 0) {
-            printf("(%d of %d) wait to start til at least two one asset is downloaded \n", availableCount, playlist->items.size());
+            printf("(%d of %d) wait to start til at least one asset is downloaded \n", availableCount, playlist->items.size());
             bgThread.addOperation([this]{
                 sleep(10);
                 int availableCount = 0;
@@ -370,8 +490,8 @@ void PlaylistController::getNextItem(){
                     if (item->asset->isAvailable) availableCount++;
                 }
                 if (availableCount != 0) {
+                    printf("ok, downloaded, let's go ! \n");
                     runOnMainQueue([this](){getNextItem();});
-                    //shouldGetNextItem = true;
                     return true;
                 }
                 else {
@@ -383,14 +503,21 @@ void PlaylistController::getNextItem(){
         }
         getNextItem();
     }
+    
 }
 
 void PlaylistController::update() { // MAIN THREAD
+    
+    mainLock.lock();
     
     if (mainQueue.size()){
         mainQueue.front()();
         mainQueue.pop();
     }
+    
+    mainLock.unlock();
+    
+    // ONLY USE 'thread local' vars here down -->>
     
     bool hasAsset = false;
     
@@ -404,7 +531,7 @@ void PlaylistController::update() { // MAIN THREAD
                     if (players[currentPlayer].playlistItem()->asset->url == playlist->items[0]->asset->url) {
                         // Edge Case, only one item on playlist and already loaded
                         players[currentPlayer].playlistItem()->duration = 60;
-                        transitionState = TransitionWaiting;
+                        transitionState = TransitionPlay;
                         printf("single slide - sleep 60 - refresh \n");
                         return;
                     }
@@ -490,6 +617,7 @@ void PlaylistController::update() { // MAIN THREAD
         }
         
     }
+
 }
 
 void PlaylistController::draw() {
@@ -545,14 +673,14 @@ void PlaylistController::uploadScreenShots(){
 
 void PlaylistController::takeScreenShot(int frame) {
     
-    cout << "grab screen shot";
+    cout << "grab screen shot" << endl;
     
     shared_ptr<ofImage> screenShot = make_shared<ofImage>();
     screenShot->setUseTexture(false);
     
     screenShot->grabScreen(ofGetWidth() / 4, ofGetHeight() / 4, ofGetWidth() / 2, ofGetHeight() / 2);
     
-    //bgThread.addOperation([screenShot, frame](){
+    bgThread.addOperation([screenShot, frame](){
         screenShot->resize(ofGetWidth() / 4, ofGetHeight() / 4);
         
         string pad = "";
@@ -578,8 +706,8 @@ void PlaylistController::takeScreenShot(int frame) {
         cout << "finish writing screenshot" << endl;
         
         screenShot->clear();
-    //    return true;
-    //});
+        return true;
+    });
 }
 
 //--------------------------------------------------------------
@@ -608,12 +736,12 @@ void PlaylistItemPlayer::loadPlaylistItem(shared_ptr<PlaylistItem> item){
             }
             
             //if (image->loadImage()){
-                printf("load photo %s \n", _playlistItem->asset->localPath.c_str());
-                printf("glTex count: %d \n", image->getTextureReference().getTextureData().textureID);
+            printf("load photo %s \n", _playlistItem->asset->localPath.c_str());
+            printf("glTex count: %d \n", image->getTextureReference().getTextureData().textureID);
             //}
-//            else {
-//                printf("error loading: photo %s \n", _playlistItem->asset->localPath.c_str());
-//            }
+            //            else {
+            //                printf("error loading: photo %s \n", _playlistItem->asset->localPath.c_str());
+            //            }
             
         }
         else if (_playlistItem->asset->type == AssetTypeVideo){
@@ -821,10 +949,18 @@ void WebThread::urlResponse(ofHttpResponse &response){
         else {
             cout << "error can't find temp file for : " << asset->name() << endl;
         }
-        
-        downloadQueue.erase(downloadQueue.begin());
+
+        //downloadQueue.erase(downloadQueue.begin());
         ofUnregisterURLNotification(this);
-        downloading = false;
+        
+        if (asset->completionBlock) {
+            PlaylistController::runOnMainQueue(asset->completionBlock);
+        }
+        
+        lock();
+        downloadQueue.pop();
+        _downloading = false;
+        unlock();
     }
     else if (response.status == 302){
         auto asset = downloadQueue.front();
@@ -848,8 +984,11 @@ void WebThread::urlResponse(ofHttpResponse &response){
     else {
         cout << "Error: " << response.status << " " << response.error << endl;
         if (response.status != -1) {
-            downloadQueue.erase(downloadQueue.begin());
-            downloading = false;
+            ofUnregisterURLNotification(this);
+            lock();
+            downloadQueue.pop();
+            _downloading = false;
+            unlock();
         }
     }
 }

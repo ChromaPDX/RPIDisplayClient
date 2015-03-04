@@ -20,6 +20,7 @@ typedef std::chrono::system_clock::time_point timePoint;
 
 timePoint string_to_time_point(const std::string &str);
 std::string time_point_to_string(timePoint &tp);
+std::string current_time_to_string();
 Value time_point_to_json(timePoint &tp);
 
 typedef enum AssetType {
@@ -115,6 +116,8 @@ public:
     AssetType type;
     string url;
     
+    string checksum;
+    
     timePoint addDate;
     timePoint removeDate;
     
@@ -125,6 +128,10 @@ public:
     bool isAvailable {false};
     string md5name();
     string name();
+    string extension();
+    
+    function<void(void)> completionBlock;
+    float version {0.0};
     
     static shared_ptr<Asset> fromJson(const Value& json);
     
@@ -142,10 +149,9 @@ public:
         ViewModel::readJson(json);
         
         validateString(json, "url", url);
-        
+        validateString(json, "checksum", checksum);
         validateDate(json, "addDate", addDate);
         validateDate(json, "removeDate", removeDate);
-        
         validateBool(json, "enabled", enabled);
         
         if (!json["assetType"].empty()){
@@ -236,6 +242,7 @@ public:
     // META
     int loopsSinceBoot = 0;
     int failedFetchRequests = 0;
+    string appVersion;
     
     Json::Value screenShot;
     Json::Value screenShots;
@@ -288,9 +295,19 @@ public:
         (out)["loopsSinceBoot"] = loopsSinceBoot;
         (out)["upTime"] = ofGetElapsedTimef();
         (out)["failedFetchRequests"] = failedFetchRequests;
+        (out)["appVersion"] = appVersion;
+        // DATE
+        auto date = Value();
+        date["__type"] = "Date";
+        date["iso"] = current_time_to_string();
+
+        (out)["lastCheckIn"] = date;
+        
         if (!screenShot.empty()) (out)["screenShot"] = screenShot;
         if (!screenShots.empty()) (out)["screenShots"] = screenShots;
-        printf("updated keys %s \n", out.toStyledString().c_str());
+        
+        //printf("updated keys %s \n", out.toStyledString().c_str());
+        
         return out;
     }
     

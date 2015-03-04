@@ -14,19 +14,27 @@
 #include <functional>
 #include <queue>
 #include "ofAppRunner.h"
+#include <sys/syscall.h>
 
 class BackgroundThread : public ofThread {
     
-public:
-    
     queue<std::function<bool(void)>> operations;
+    long tid = 0;
+    
+public:
     
     BackgroundThread() : ofThread() {
         thread.setPriority((Poco::Thread::Priority)Poco::Thread::getMinOSPriority());
-        printf("spawn thread priority (%d) \n", thread.getPriority());
+        //printf("spawn thread priority (%d) \n", thread.getPriority());
     }
     
     void addOperation(std::function<bool(void)> operation){
+        if (syscall(SYS_gettid) == tid){
+            //printf("already on bg thread : %d", getThreadId())
+            operations.push(operation);
+            return;
+        }
+        printf("background dispatch %ld -> %ld \n", syscall(SYS_gettid), tid);
         lock();
         operations.push(operation);
         unlock();
@@ -38,13 +46,22 @@ public:
         
         while(isThreadRunning()) {
             
+            if (!tid) tid = syscall(SYS_gettid);
+            
+            lock();
             if (operations.size()){
-                if (operations.front()()){
+                std::function<bool(void)> proc = operations.front();
+                unlock();
+                if (proc()){
                     lock();
                     operations.pop();
                     unlock();
                 }
             }
+            else {
+                unlock();
+            }
+            
             
             ofSleepMillis(100);
         }

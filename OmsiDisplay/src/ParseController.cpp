@@ -65,7 +65,7 @@ curl_slist* commonHeaders(int type = 0){
     
     curl_slist *headers=NULL; // init to NULL is important
     for (auto& str : header) {
-        printf("HEADER += %s \n", str.c_str());
+        //printf("HEADER += %s \n", str.c_str());
         headers = curl_slist_append(headers, str.c_str());
     }
     
@@ -122,7 +122,7 @@ shared_ptr<Json::Value> ParseController::apiCall(string requestType, string urlS
     
     string url = ParseController::parseDomain + urlSuffix;//ParseController::objectPrefix + className;
     
-    printf("curl request : \n %s \n", url.c_str());
+    //printf("curl request : \n %s \n", url.c_str());
     
     curl_slist *headers = commonHeaders(contentType);
     
@@ -200,7 +200,7 @@ shared_ptr<Json::Value> ParseController::apiCall(string requestType, ofFile& fil
     
     string url = ParseController::parseDomain +  ParseController::filePrefix + path ;//ParseController::objectPrefix + className;
     
-    printf("curl request : \n %s \n", url.c_str());
+    //printf("curl request : \n %s \n", url.c_str());
     
     curl_slist *headers = commonHeaders(contentType);
     
@@ -284,7 +284,7 @@ shared_ptr<Json::Value> ParseController::callFunction(string functionName, share
     
     string url = ParseController::functionPrefix + functionName;
     
-    printf("send updated object %s \n", data->toStyledString().c_str());
+    //printf("send updated object %s \n", data->toStyledString().c_str());
     
     shared_ptr<Json::Value> result = apiCall("", url, data);
     
@@ -317,7 +317,7 @@ shared_ptr<Json::Value> ParseController::updateObject(shared_ptr<ViewModel> obje
     
     auto data = make_shared<Value>(object->updatedKeys());
     
-    printf("send updated object %s \n", data->toStyledString().c_str());
+    //printf("send updated object %s \n", data->toStyledString().c_str());
     
     shared_ptr<Json::Value> result = apiCall("PUT", url, data);
     
@@ -330,14 +330,11 @@ shared_ptr<Json::Value> ParseController::updateObject(shared_ptr<ViewModel> obje
     return nullptr;
 }
 
-shared_ptr<Json::Value> ParseController::createNewDisplay(){
+shared_ptr<Json::Value> ParseController::createNewDisplay(string deviceId){
     
     curl_global_init(CURL_GLOBAL_ALL);
     
     auto url = ParseController::objectPrefix + "Display";
-    
-    // Poco::Environment::NodeId id;
-    auto deviceId = Poco::Environment::nodeId();
     
     Json::Value value(Json::objectValue); // DICT
     value["deviceId"] = deviceId;
@@ -408,7 +405,7 @@ shared_ptr<Json::Value> ParseController::post(){
     
     curl_slist *headers=NULL; // init to NULL is important
     for (auto& str : header) {
-        printf("HEADER += %s \n", str.c_str());
+        //printf("HEADER += %s \n", str.c_str());
         headers = curl_slist_append(headers, str.c_str());
     }
     

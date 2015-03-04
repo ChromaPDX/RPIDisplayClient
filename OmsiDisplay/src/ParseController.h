@@ -46,7 +46,7 @@ public:
     shared_ptr<Json::Value> updateObject(shared_ptr<ViewModel> object);
     shared_ptr<Json::Value> uploadFile(ofFile& file);
     
-    shared_ptr<Json::Value> createNewDisplay();
+    shared_ptr<Json::Value> createNewDisplay(string deviceId);
     
     shared_ptr<Json::Value> post();
     shared_ptr<Json::Value> get();

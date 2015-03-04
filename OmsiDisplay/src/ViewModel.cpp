@@ -38,6 +38,11 @@ string Asset::name() {
     return last.substr(0, last.find_last_of("?"));
 }
 
+string Asset::extension() {
+    string last = url.substr(url.find_last_of(".") + 1);
+    return last.substr(0, last.find_last_of("?"));
+}
+
 //shared_ptr<Playlist> Playlist::fromJson(Value& json) {
 //    shared_ptr<Playlist> playlist = make_shared<Playlist>(json);
 //    return playlist;
@@ -137,6 +142,11 @@ std::string time_point_to_string(std::chrono::system_clock::time_point &tp)
     result.append("Z");
     
     return result;
+}
+
+std::string current_time_to_string(){
+    auto now = std::chrono::high_resolution_clock::now();
+    return time_point_to_string(now);
 }
 
 //Value time_point_to_json(std::chrono::system_clock::time_point &tp){

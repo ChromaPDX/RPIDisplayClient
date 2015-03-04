@@ -11,9 +11,9 @@ RPI_ROOT = $(HOME)
 ##### NETWORK OR LOCAL ###########
 # Create the app from OSX straight on the RPI!
 # this assumes that your Raspberry Pi is sharing it's root as a Samba shared folder called "PiShare"
- PROGRAM = /media/rpi/home/pi/OmsiDisplay
+# PROGRAM = /media/rpi/home/pi/OmsiDisplay
 # Create the app on your local disk
-# PROGRAM = bin/App
+ PROGRAM = bin/App
 
 # Where to find OF
 OF_ROOT =../../../
@@ -149,16 +149,16 @@ LDFLAGS += -L$(RPI_ROOT)lib/arm-linux-gnueabihf
 #LDFLAGS += libs/curl/lib/libgnutls.a
 #LDFLAGS += libs/curl/lib/libgnutlsxx.a
 #
-#LDFLAGS += libs/ffmpeg/lib/libavcodec.a
-#LDFLAGS += libs/ffmpeg/lib/libavformat.a
-#LDFLAGS += libs/ffmpeg/lib/libavutil.a
-#LDFLAGS += libs/ffmpeg/lib/libavcodec.a
-#LDFLAGS += libs/ffmpeg/lib/libavformat.a
-#LDFLAGS += libs/ffmpeg/lib/libavutil.a
-#LDFLAGS += libs/ffmpeg/lib/libavfilter.a
-#LDFLAGS += libs/ffmpeg/lib/libavdevice.a
-#LDFLAGS += libs/ffmpeg/lib/libswresample.a
-#LDFLAGS += libs/ffmpeg/lib/libswscale.a
+LDFLAGS += libs/ffmpeg/lib/libavcodec.a
+LDFLAGS += libs/ffmpeg/lib/libavformat.a
+LDFLAGS += libs/ffmpeg/lib/libavutil.a
+LDFLAGS += libs/ffmpeg/lib/libavcodec.a
+LDFLAGS += libs/ffmpeg/lib/libavformat.a
+LDFLAGS += libs/ffmpeg/lib/libavutil.a
+LDFLAGS += libs/ffmpeg/lib/libavfilter.a
+LDFLAGS += libs/ffmpeg/lib/libavdevice.a
+LDFLAGS += libs/ffmpeg/lib/libswresample.a
+LDFLAGS += libs/ffmpeg/lib/libswscale.a
 
 # openFrameworks
 LDFLAGS += $(OF_ROOT)libs/kiss/lib/linuxarmv6l/libkiss.a
@@ -250,13 +250,13 @@ LDLIBS += vchiq_arm
 
 #omx
 
-LDLIBS += swresample
-LDLIBS += swscale
-LDLIBS += avcodec
-LDLIBS += avformat
-LDLIBS += avutil
-LDLIBS += avfilter
-LDLIBS += avdevice
+#LDLIBS += swresample
+#LDLIBS += swscale
+#LDLIBS += avcodec
+#LDLIBS += avformat
+#LDLIBS += avutil
+#LDLIBS += avfilter
+#LDLIBS += avdevice
 
 #QT5
 

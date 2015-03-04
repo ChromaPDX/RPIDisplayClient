@@ -8,7 +8,6 @@
 
 class ofApp : public ofBaseApp{
 public:
-    void fetchData();
     
     void setup();
     

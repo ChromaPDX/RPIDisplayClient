@@ -19,6 +19,7 @@
 #include "ParseController.h"
 #include "URLImage.h"
 #include <mutex>
+#include <sys/syscall.h>
 
 class PlaylistItemPlayer {
     
@@ -68,14 +69,43 @@ class Playlist;
 
 class WebThread : public ofThread {
     
+    queue<std::function<bool(void)>> operations;
+    queue<shared_ptr<Asset>> downloadQueue;
+    bool _downloading {false};
+    ofURLFileLoader loader;
+    function<void(void)> completionBlock;
+    long tid = 0;
+    
 public:
     
-    bool downloading {false};
+    bool downloading(){
+        return _downloading;
+    }
     
-    queue<std::function<bool(WebThread*)>> operationQueue;
-    vector<shared_ptr<Asset>> downloadQueue;
+    void addOperation(std::function<bool(void)> operation){
+        if (syscall(SYS_gettid) == tid){
+            operations.push(operation);
+            return;
+        }
+        printf("web dispatch %ld -> %ld \n", syscall(SYS_gettid), tid);
+        lock();
+        operations.push(operation);
+        unlock();
+    }
     
-    ofURLFileLoader loader;
+    void queueDownload(shared_ptr<Asset> asset){
+        if (syscall(SYS_gettid) == tid){
+            //printf("on web thread, queue download %d : %s \n", downloadQueue.size(), asset->url.c_str());
+            // already on web thread, don't need to lock mutex
+            downloadQueue.push(asset);
+            return;
+        }
+        printf("web dispatch %ld -> %ld \n", syscall(SYS_gettid), tid);
+        lock();
+        downloadQueue.push(asset);
+        printf("queue download %d : %s \n", downloadQueue.size(), asset->url.c_str());
+        unlock();
+    }
     
     void threadedFunction() {
         
@@ -83,23 +113,33 @@ public:
         
         while(isThreadRunning()) {
             
-            if (!downloading){
-                
-                if (operationQueue.size()){
-                    
-                    if (operationQueue.front()(this)){
-                        lock();
-                        operationQueue.pop();
-                        unlock();
-                    }
-                    
+            if (!tid) tid = syscall(SYS_gettid);
+
+            lock();
+            if (operations.size()){
+                std::function<bool(void)> proc = operations.front();
+                unlock();
+                if (proc()){
+                    lock();
+                    operations.pop();
+                    unlock();
                 }
+            }
+            else {
+                unlock();
+            }
+            
+            if (!_downloading){
                 
                 if (downloadQueue.size()){
-                    downloading = true;
-                    ofRegisterURLNotification(this);
-                    auto asset = downloadQueue.front();
                     
+                    _downloading = true;
+                    
+                    ofRegisterURLNotification(this);
+                    
+                    lock();
+                    auto asset = downloadQueue.front();
+                    unlock();
                     
                     string path = ofToDataPath("./assets/", false) + "dl_" + asset->md5name();
                     
@@ -113,15 +153,8 @@ public:
                     cout << "Begin download of : " << asset->url << " to " << path << endl;
                     
                     loader.saveAsync(asset->url, path);
-                    
-                    //                    loader.saveTo(asset->url, path);
-                    //
-                    //                    cout << "Finish download of : " << asset->name() << endl;
-                    //                    downloadQueue.front()->isAvailable = true;
-                    //                    downloadQueue.erase(downloadQueue.begin());
-                    //                    downloading = false;
-                    //                    ofUnregisterURLNotification(this);
                 }
+                
             }
             
             ofSleepMillis(100);
@@ -145,11 +178,13 @@ public:
     
     ParseController parseController;
     
-    bool fetchData();
+    void fetchData();
+    void softwareUpdate();
     
     bool savePlaylist(shared_ptr<Json::Value> playlistItems);
     shared_ptr<Json::Value> loadCachedPlaylist();
     
+    string deviceId;
     shared_ptr<DisplayClient> me;
     
     WebThread webThread; // BACKGROUND THREAD
@@ -157,16 +192,13 @@ public:
     BackgroundThread bgThread;
     BackgroundThread parseThread;
     
-    queue<std::function<void(void)>> mainQueue;
-    std::mutex mainLock;
+    static queue<std::function<void(void)>> mainQueue;
+    static std::mutex mainLock;
+    static long mainQueueId;
     
-    void runOnMainQueue(std::function<void(void)> operation){
-        mainLock.lock();
-        mainQueue.push(operation);
-        mainLock.unlock();
-    }
+    static void runOnMainQueue(std::function<void(void)> operation);
+    shared_ptr<Playlist> defaultPlaylist();
     
-    shared_ptr<Playlist> testPlaylist();
     shared_ptr<Playlist> playlist;
     vector<shared_ptr<PlaylistItem>> playlistItems;
     
@@ -185,7 +217,7 @@ public:
     TransitionState transitionState = TransitionLoad;
     
     shared_ptr<Json::Value> fetchItems();
-    void setItems(shared_ptr<Json::Value> playlistItems);
+    void setItems(shared_ptr<Json::Value> playlistItems, bool isOnline);
     
     void setup();
     void update();
